@@ -1,0 +1,20 @@
+.voucher-content{
+  padding: 1rem;
+}
+
+.voucher-content .title{
+  color: #1D1D1D;
+  font-size: 24px;
+  margin-bottom: 0.5rem;
+}
+
+.voucher-content .content{
+  color: #5E5E5E;
+  font-size: 16px;
+  margin-bottom: 0.5rem;
+}
+
+.voucher-content .banner{
+  display: block;
+  margin: 1rem auto;
+}

@@ -1,0 +1,14 @@
+{
+  "entries": [
+    "./components/BarCode/index.js",
+    "./components/Layout/index.js",
+    "./components/VoucherContent/index.js"
+  ],
+  "compiler": {
+    "name": "@stencil/core",
+    "version": "2.19.2",
+    "typescriptVersion": "4.7.4"
+  },
+  "collections": [],
+  "bundles": []
+}

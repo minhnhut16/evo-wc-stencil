@@ -1,0 +1,1 @@
+import{p as o,b as e}from"./p-e0744f09.js";(()=>{const e=import.meta.url,p={};return""!==e&&(p.resourcesUrl=new URL(".",e).href),o(p)})().then((o=>e([["p-e8dd59a5",[[1,"bar-code"],[1,"layout-app"],[1,"voucher-content"]]]],o)));
