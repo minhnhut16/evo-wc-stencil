@@ -1,4 +1,4 @@
-import { g as getRenderingRef, f as forceUpdate, r as registerInstance, h, H as Host } from './index-c11634e8.js';
+import { g as getRenderingRef, f as forceUpdate, r as registerInstance, h, H as Host, a as getAssetPath } from './index-ae62b7c7.js';
 
 // Unique ID creation requires a high quality random # generator. In the browser we therefore
 // require the crypto API and do not support built-in fallback to lower quality random number
@@ -3721,6 +3721,7 @@ const indexCss$1 = ".layout-app-wrapper{display:-ms-flexbox;display:flex;-ms-fle
 const Layout = class {
   constructor(hostRef) {
     registerInstance(this, hostRef);
+    this.ignore = true;
   }
   // eslint-disable-next-line class-methods-use-this
   componentDidLoad() {
@@ -3728,7 +3729,9 @@ const Layout = class {
   }
   // eslint-disable-next-line class-methods-use-this
   render() {
-    return (h("section", { class: "layout-app-wrapper" }, h("div", { class: "inner" }, h("slot", null))));
+    return (h("section", { class: "layout-app-wrapper" }, h("div", { class: "inner" }, state.loading
+      ? h("img", { class: "loading", src: getAssetPath('./assets/loading.svg') })
+      : h("slot", null))));
   }
   static get assetsDirs() { return ["assets"]; }
 };
@@ -8036,6 +8039,7 @@ const indexCss = ".voucher-content{padding:1rem}.voucher-content .title{color:#1
 const VoucherContent = class {
   constructor(hostRef) {
     registerInstance(this, hostRef);
+    this.ignore = true;
   }
   // eslint-disable-next-line class-methods-use-this
   render() {

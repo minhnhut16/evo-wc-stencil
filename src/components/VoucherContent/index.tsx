@@ -1,5 +1,5 @@
 import {
-  Component, h,
+  Component, h, State,
 } from '@stencil/core';
 import { parse } from 'markdown';
 import { state } from '../../store/voucher-detail';
@@ -10,6 +10,9 @@ import { state } from '../../store/voucher-detail';
   shadow: true,
 })
 export class VoucherContent {
+  // https://github.com/ionic-team/stencil-store/issues/44 - not render when state on store change issue, need 1 force state
+  @State() ignore: boolean = true;
+
   // eslint-disable-next-line class-methods-use-this
   render() {
     return (

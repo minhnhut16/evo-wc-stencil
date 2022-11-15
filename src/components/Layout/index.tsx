@@ -1,5 +1,7 @@
-import { Component, h } from '@stencil/core';
-import { getVoucher } from '../../store/voucher-detail';
+import {
+  Component, h, State, getAssetPath,
+} from '@stencil/core';
+import { getVoucher, state } from '../../store/voucher-detail';
 
 @Component({
   tag: 'layout-app',
@@ -13,12 +15,18 @@ export class Layout {
     getVoucher();
   }
 
+  // https://github.com/ionic-team/stencil-store/issues/44 - not render when state on store change issue, need 1 force state
+  @State() ignore: boolean = true;
+
   // eslint-disable-next-line class-methods-use-this
   render() {
     return (
       <section class="layout-app-wrapper">
         <div class="inner">
-          <slot />
+        {state.loading
+          ? <img class="loading" src={getAssetPath('./assets/loading.svg')} />
+          : <slot />
+          }
         </div>
       </section>
     );
