@@ -1,6 +1,6 @@
-import { r as registerInstance, h } from './index-b99e61ae.js';
-import { a as getAugmentedNamespace, c as createCommonjsModule } from './_commonjsHelpers-b08b522c.js';
-import { s as state } from './index-10467ef7.js';
+import { proxyCustomElement, HTMLElement, h } from '@stencil/core/internal/client';
+import { a as getAugmentedNamespace, c as createCommonjsModule } from './_commonjsHelpers.js';
+import { s as state } from './index2.js';
 
 const global$1 = (typeof global !== "undefined" ? global :
   typeof self !== "undefined" ? self :
@@ -244,11 +244,6 @@ Buffer.TYPED_ARRAY_SUPPORT = global$1.TYPED_ARRAY_SUPPORT !== undefined
   ? global$1.TYPED_ARRAY_SUPPORT
   : true;
 
-/*
- * Export kMaxLength after typed array support is determined.
- */
-var _kMaxLength = kMaxLength();
-
 function kMaxLength () {
   return Buffer.TYPED_ARRAY_SUPPORT
     ? 0x7fffffff
@@ -432,7 +427,6 @@ function fromArrayLike (that, array) {
 }
 
 function fromArrayBuffer (that, array, byteOffset, length) {
-  array.byteLength; // this throws if `array` is not a valid ArrayBuffer
 
   if (byteOffset < 0 || array.byteLength < byteOffset) {
     throw new RangeError('\'offset\' is out of bounds')
@@ -499,13 +493,6 @@ function checked (length) {
                          'size: 0x' + kMaxLength().toString(16) + ' bytes')
   }
   return length | 0
-}
-
-function SlowBuffer (length) {
-  if (+length != length) { // eslint-disable-line eqeqeq
-    length = 0;
-  }
-  return Buffer.alloc(+length)
 }
 Buffer.isBuffer = isBuffer$1;
 function internalIsBuffer (b) {
@@ -1986,228 +1973,6 @@ function isSlowBuffer (obj) {
   return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isFastBuffer(obj.slice(0, 0))
 }
 
-// shim for using process in browser
-// based off https://github.com/defunctzombie/node-process/blob/master/browser.js
-
-function defaultSetTimout() {
-    throw new Error('setTimeout has not been defined');
-}
-function defaultClearTimeout () {
-    throw new Error('clearTimeout has not been defined');
-}
-var cachedSetTimeout = defaultSetTimout;
-var cachedClearTimeout = defaultClearTimeout;
-if (typeof global$1.setTimeout === 'function') {
-    cachedSetTimeout = setTimeout;
-}
-if (typeof global$1.clearTimeout === 'function') {
-    cachedClearTimeout = clearTimeout;
-}
-
-function runTimeout(fun) {
-    if (cachedSetTimeout === setTimeout) {
-        //normal enviroments in sane situations
-        return setTimeout(fun, 0);
-    }
-    // if setTimeout wasn't available but was latter defined
-    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
-        cachedSetTimeout = setTimeout;
-        return setTimeout(fun, 0);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedSetTimeout(fun, 0);
-    } catch(e){
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
-            return cachedSetTimeout.call(null, fun, 0);
-        } catch(e){
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
-            return cachedSetTimeout.call(this, fun, 0);
-        }
-    }
-
-
-}
-function runClearTimeout(marker) {
-    if (cachedClearTimeout === clearTimeout) {
-        //normal enviroments in sane situations
-        return clearTimeout(marker);
-    }
-    // if clearTimeout wasn't available but was latter defined
-    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
-        cachedClearTimeout = clearTimeout;
-        return clearTimeout(marker);
-    }
-    try {
-        // when when somebody has screwed with setTimeout but no I.E. maddness
-        return cachedClearTimeout(marker);
-    } catch (e){
-        try {
-            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
-            return cachedClearTimeout.call(null, marker);
-        } catch (e){
-            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
-            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
-            return cachedClearTimeout.call(this, marker);
-        }
-    }
-
-
-
-}
-var queue = [];
-var draining = false;
-var currentQueue;
-var queueIndex = -1;
-
-function cleanUpNextTick() {
-    if (!draining || !currentQueue) {
-        return;
-    }
-    draining = false;
-    if (currentQueue.length) {
-        queue = currentQueue.concat(queue);
-    } else {
-        queueIndex = -1;
-    }
-    if (queue.length) {
-        drainQueue();
-    }
-}
-
-function drainQueue() {
-    if (draining) {
-        return;
-    }
-    var timeout = runTimeout(cleanUpNextTick);
-    draining = true;
-
-    var len = queue.length;
-    while(len) {
-        currentQueue = queue;
-        queue = [];
-        while (++queueIndex < len) {
-            if (currentQueue) {
-                currentQueue[queueIndex].run();
-            }
-        }
-        queueIndex = -1;
-        len = queue.length;
-    }
-    currentQueue = null;
-    draining = false;
-    runClearTimeout(timeout);
-}
-function nextTick(fun) {
-    var args = new Array(arguments.length - 1);
-    if (arguments.length > 1) {
-        for (var i = 1; i < arguments.length; i++) {
-            args[i - 1] = arguments[i];
-        }
-    }
-    queue.push(new Item(fun, args));
-    if (queue.length === 1 && !draining) {
-        runTimeout(drainQueue);
-    }
-}
-// v8 likes predictible objects
-function Item(fun, array) {
-    this.fun = fun;
-    this.array = array;
-}
-Item.prototype.run = function () {
-    this.fun.apply(null, this.array);
-};
-var title = 'browser';
-var platform = 'browser';
-var browser = true;
-var env = {};
-var argv = [];
-var version = ''; // empty string to avoid regexp issues
-var versions = {};
-var release = {};
-var config = {};
-
-function noop() {}
-
-var on = noop;
-var addListener = noop;
-var once = noop;
-var off = noop;
-var removeListener = noop;
-var removeAllListeners = noop;
-var emit = noop;
-
-function binding(name) {
-    throw new Error('process.binding is not supported');
-}
-
-function cwd () { return '/' }
-function chdir (dir) {
-    throw new Error('process.chdir is not supported');
-}function umask() { return 0; }
-
-// from https://github.com/kumavis/browser-process-hrtime/blob/master/index.js
-var performance = global$1.performance || {};
-var performanceNow =
-  performance.now        ||
-  performance.mozNow     ||
-  performance.msNow      ||
-  performance.oNow       ||
-  performance.webkitNow  ||
-  function(){ return (new Date()).getTime() };
-
-// generate timestamp or delta
-// see http://nodejs.org/api/process.html#process_process_hrtime
-function hrtime(previousTimestamp){
-  var clocktime = performanceNow.call(performance)*1e-3;
-  var seconds = Math.floor(clocktime);
-  var nanoseconds = Math.floor((clocktime%1)*1e9);
-  if (previousTimestamp) {
-    seconds = seconds - previousTimestamp[0];
-    nanoseconds = nanoseconds - previousTimestamp[1];
-    if (nanoseconds<0) {
-      seconds--;
-      nanoseconds += 1e9;
-    }
-  }
-  return [seconds,nanoseconds]
-}
-
-var startTime = new Date();
-function uptime() {
-  var currentTime = new Date();
-  var dif = currentTime - startTime;
-  return dif / 1000;
-}
-
-var browser$1 = {
-  nextTick: nextTick,
-  title: title,
-  browser: browser,
-  env: env,
-  argv: argv,
-  version: version,
-  versions: versions,
-  on: on,
-  addListener: addListener,
-  once: once,
-  off: off,
-  removeListener: removeListener,
-  removeAllListeners: removeAllListeners,
-  emit: emit,
-  binding: binding,
-  cwd: cwd,
-  chdir: chdir,
-  umask: umask,
-  hrtime: hrtime,
-  platform: platform,
-  release: release,
-  config: config,
-  uptime: uptime
-};
-
 var inherits;
 if (typeof Object.create === 'function'){
   inherits = function inherits(ctor, superCtor) {
@@ -2270,8 +2035,7 @@ function format(f) {
     }
   }
   return str;
-};
-
+}
 
 // Mark that a method should not be used.
 // Returns a modified function which warns once by default.
@@ -2284,18 +2048,10 @@ function deprecate(fn, msg) {
     };
   }
 
-  if (browser$1.noDeprecation === true) {
-    return fn;
-  }
-
   var warned = false;
   function deprecated() {
     if (!warned) {
-      if (browser$1.throwDeprecation) {
-        throw new Error(msg);
-      } else if (browser$1.traceDeprecation) {
-        console.trace(msg);
-      } else {
+      {
         console.error(msg);
       }
       warned = true;
@@ -2304,14 +2060,13 @@ function deprecate(fn, msg) {
   }
 
   return deprecated;
-};
-
+}
 
 var debugs = {};
 var debugEnviron;
 function debuglog(set) {
   if (isUndefined(debugEnviron))
-    debugEnviron = browser$1.env.NODE_DEBUG || '';
+    debugEnviron = '';
   set = set.toUpperCase();
   if (!debugs[set]) {
     if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
@@ -2325,8 +2080,7 @@ function debuglog(set) {
     }
   }
   return debugs[set];
-};
-
+}
 
 /**
  * Echos the value of a value. Trys to print the value out
@@ -2637,10 +2391,8 @@ function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
 
 
 function reduceToSingleString(output, base, braces) {
-  var numLinesEst = 0;
   var length = output.reduce(function(prev, cur) {
-    numLinesEst++;
-    if (cur.indexOf('\n') >= 0) numLinesEst++;
+    if (cur.indexOf('\n') >= 0) ;
     return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
   }, 0);
 
@@ -2763,8 +2515,7 @@ function _extend(origin, add) {
     origin[keys[i]] = add[keys[i]];
   }
   return origin;
-};
-
+}
 function hasOwnProperty$1(obj, prop) {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
@@ -3172,8 +2923,7 @@ Markdown.dialects.Gruber = {
       // There might also be adjacent code block to merge.
 
       var ret = [],
-          re = /^(?: {0,3}\t| {4})(.*)\n?/,
-          lines;
+          re = /^(?: {0,3}\t| {4})(.*)\n?/;
 
       // 4 spaces + content
       if ( !block.match( re ) ) return undefined;
@@ -3250,7 +3000,6 @@ Markdown.dialects.Gruber = {
       // Use a closure to hide a few variables.
       var any_list = "[*+-]|\\d+\\.",
           bullet_list = /[*+-]/,
-          number_list = /\d+\./,
           // Capture leading indent as it matters for determining nested lists.
           is_list_re = new RegExp( "^( {0,3})(" + any_list + ")[ \t]+" ),
           indent_re = "(?: {0,3}\\t| {4})";
@@ -3372,7 +3121,6 @@ Markdown.dialects.Gruber = {
           var li_accumulate = "";
 
           // Loop over the lines in this block looking for tight lists.
-          tight_search:
           for ( var line_no = 0; line_no < lines.length; line_no++ ) {
             var nl = "",
                 l = lines[line_no].replace(/^\n/, function(n) { nl = n; return ""; });
@@ -3528,7 +3276,6 @@ Markdown.dialects.Gruber = {
 
       // Strip off the leading "> " and re-process as a block.
       var input = block.replace( /^> ?/gm, "" ),
-          old_tree = this.tree,
           processedBlock = this.toTree( input, [ "blockquote" ] ),
           attr = extract_attr( processedBlock );
 
@@ -3597,8 +3344,7 @@ Markdown.dialects.Gruber.inline = {
 
     __oneElement__: function oneElement( text, patterns_or_re, previous_nodes ) {
       var m,
-          res,
-          lastIndex = 0;
+          res;
 
       patterns_or_re = patterns_or_re || this.dialect.inline.__patterns__;
       var re = new RegExp( "([\\s\\S]*?)(" + (patterns_or_re.source || patterns_or_re) + ")" );
@@ -3867,7 +3613,7 @@ function strong_em( tag, md ) {
 
       //D:this.debug("processInline from", tag + ": ", uneval( res ) );
 
-      var check = this[state_slot].shift();
+      this[state_slot].shift();
       if ( last instanceof CloseTag ) {
         res.pop();
         // We matched! Huzzah.
@@ -4541,11 +4287,7 @@ function merge_text_nodes( jsonml ) {
 }
 
 } )( (function() {
-  if ( 'object' === "undefined" ) {
-    window.markdown = {};
-    return window.markdown;
-  }
-  else {
+  {
     return exports;
   }
 } )() );
@@ -4559,15 +4301,33 @@ exports.parse = exports.markdown.toHTML;
 
 const indexCss = ".voucher-content{padding:1rem}.voucher-content .title{color:#1D1D1D;font-size:24px;margin-bottom:0.5rem}.voucher-content .content{color:#5E5E5E;font-size:16px;margin-bottom:0.5rem}.voucher-content .banner{display:block;margin:1rem auto}";
 
-const VoucherContent = class {
-  constructor(hostRef) {
-    registerInstance(this, hostRef);
+const VoucherContent$1 = /*@__PURE__*/ proxyCustomElement(class extends HTMLElement {
+  constructor() {
+    super();
+    this.__registerHost();
+    this.__attachShadow();
   }
   // eslint-disable-next-line class-methods-use-this
   render() {
     return (h("div", { class: "voucher-content" }, h("div", { class: "title" }, state.voucher.title), h("div", { class: "content" }, state.voucher.subTitle), h("img", { class: "banner", src: state.voucher.banner }), h("div", { class: "title" }, "\u0110i\u1EC1u ki\u1EC7n \u00E1p d\u1EE5ng"), state.voucher.condition && h("div", { class: "content", innerHTML: lib.parse(state.voucher.condition) })));
   }
-};
-VoucherContent.style = indexCss;
+  static get style() { return indexCss; }
+}, [1, "voucher-content"]);
+function defineCustomElement$1() {
+  if (typeof customElements === "undefined") {
+    return;
+  }
+  const components = ["voucher-content"];
+  components.forEach(tagName => { switch (tagName) {
+    case "voucher-content":
+      if (!customElements.get(tagName)) {
+        customElements.define(tagName, VoucherContent$1);
+      }
+      break;
+  } });
+}
 
-export { VoucherContent as voucher_content };
+const VoucherContent = VoucherContent$1;
+const defineCustomElement = defineCustomElement$1;
+
+export { VoucherContent, defineCustomElement };

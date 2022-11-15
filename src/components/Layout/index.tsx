@@ -1,5 +1,5 @@
-import { Component, h, getAssetPath } from '@stencil/core';
-import { getVoucher, state } from '../../store/voucher-detail';
+import { Component, h } from '@stencil/core';
+import { getVoucher } from '../../store/voucher-detail';
 
 @Component({
   tag: 'layout-app',

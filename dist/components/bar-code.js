@@ -1,6 +1,6 @@
-import { r as registerInstance, h, e as Host } from './index-b99e61ae.js';
-import { c as createCommonjsModule, g as getDefaultExportFromCjs } from './_commonjsHelpers-b08b522c.js';
-import { o as onChange } from './index-10467ef7.js';
+import { proxyCustomElement, HTMLElement, h, Host } from '@stencil/core/internal/client';
+import { c as createCommonjsModule, g as getDefaultExportFromCjs } from './_commonjsHelpers.js';
+import { o as onChange } from './index2.js';
 
 // Unique ID creation requires a high quality random # generator. In the browser we therefore
 // require the crypto API and do not support built-in fallback to lower quality random number
@@ -21,12 +21,6 @@ function rng() {
   return getRandomValues(rnds8);
 }
 
-const REGEX = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000)$/i;
-
-function validate(uuid) {
-  return typeof uuid === 'string' && REGEX.test(uuid);
-}
-
 /**
  * Convert array of 16 byte values to UUID string format of the form:
  * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
@@ -43,424 +37,6 @@ function unsafeStringify(arr, offset = 0) {
   // and works in ways you may not expect. See https://github.com/uuidjs/uuid/pull/434
   return (byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + '-' + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + '-' + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + '-' + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + '-' + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]]).toLowerCase();
 }
-
-function stringify(arr, offset = 0) {
-  const uuid = unsafeStringify(arr, offset); // Consistency check for valid UUID.  If this throws, it's likely due to one
-  // of the following:
-  // - One or more input array values don't map to a hex octet (leading to
-  // "undefined" in the uuid)
-  // - Invalid input values for the RFC `version` or `variant` fields
-
-  if (!validate(uuid)) {
-    throw TypeError('Stringified UUID is invalid');
-  }
-
-  return uuid;
-}
-
-//
-// Inspired by https://github.com/LiosK/UUID.js
-// and http://docs.python.org/library/uuid.html
-
-let _nodeId;
-
-let _clockseq; // Previous uuid creation time
-
-
-let _lastMSecs = 0;
-let _lastNSecs = 0; // See https://github.com/uuidjs/uuid for API details
-
-function v1(options, buf, offset) {
-  let i = buf && offset || 0;
-  const b = buf || new Array(16);
-  options = options || {};
-  let node = options.node || _nodeId;
-  let clockseq = options.clockseq !== undefined ? options.clockseq : _clockseq; // node and clockseq need to be initialized to random values if they're not
-  // specified.  We do this lazily to minimize issues related to insufficient
-  // system entropy.  See #189
-
-  if (node == null || clockseq == null) {
-    const seedBytes = options.random || (options.rng || rng)();
-
-    if (node == null) {
-      // Per 4.5, create and 48-bit node id, (47 random bits + multicast bit = 1)
-      node = _nodeId = [seedBytes[0] | 0x01, seedBytes[1], seedBytes[2], seedBytes[3], seedBytes[4], seedBytes[5]];
-    }
-
-    if (clockseq == null) {
-      // Per 4.2.2, randomize (14 bit) clockseq
-      clockseq = _clockseq = (seedBytes[6] << 8 | seedBytes[7]) & 0x3fff;
-    }
-  } // UUID timestamps are 100 nano-second units since the Gregorian epoch,
-  // (1582-10-15 00:00).  JSNumbers aren't precise enough for this, so
-  // time is handled internally as 'msecs' (integer milliseconds) and 'nsecs'
-  // (100-nanoseconds offset from msecs) since unix epoch, 1970-01-01 00:00.
-
-
-  let msecs = options.msecs !== undefined ? options.msecs : Date.now(); // Per 4.2.1.2, use count of uuid's generated during the current clock
-  // cycle to simulate higher resolution clock
-
-  let nsecs = options.nsecs !== undefined ? options.nsecs : _lastNSecs + 1; // Time since last uuid creation (in msecs)
-
-  const dt = msecs - _lastMSecs + (nsecs - _lastNSecs) / 10000; // Per 4.2.1.2, Bump clockseq on clock regression
-
-  if (dt < 0 && options.clockseq === undefined) {
-    clockseq = clockseq + 1 & 0x3fff;
-  } // Reset nsecs if clock regresses (new clockseq) or we've moved onto a new
-  // time interval
-
-
-  if ((dt < 0 || msecs > _lastMSecs) && options.nsecs === undefined) {
-    nsecs = 0;
-  } // Per 4.2.1.2 Throw error if too many uuids are requested
-
-
-  if (nsecs >= 10000) {
-    throw new Error("uuid.v1(): Can't create more than 10M uuids/sec");
-  }
-
-  _lastMSecs = msecs;
-  _lastNSecs = nsecs;
-  _clockseq = clockseq; // Per 4.1.4 - Convert from unix epoch to Gregorian epoch
-
-  msecs += 12219292800000; // `time_low`
-
-  const tl = ((msecs & 0xfffffff) * 10000 + nsecs) % 0x100000000;
-  b[i++] = tl >>> 24 & 0xff;
-  b[i++] = tl >>> 16 & 0xff;
-  b[i++] = tl >>> 8 & 0xff;
-  b[i++] = tl & 0xff; // `time_mid`
-
-  const tmh = msecs / 0x100000000 * 10000 & 0xfffffff;
-  b[i++] = tmh >>> 8 & 0xff;
-  b[i++] = tmh & 0xff; // `time_high_and_version`
-
-  b[i++] = tmh >>> 24 & 0xf | 0x10; // include version
-
-  b[i++] = tmh >>> 16 & 0xff; // `clock_seq_hi_and_reserved` (Per 4.2.2 - include variant)
-
-  b[i++] = clockseq >>> 8 | 0x80; // `clock_seq_low`
-
-  b[i++] = clockseq & 0xff; // `node`
-
-  for (let n = 0; n < 6; ++n) {
-    b[i + n] = node[n];
-  }
-
-  return buf || unsafeStringify(b);
-}
-
-function parse(uuid) {
-  if (!validate(uuid)) {
-    throw TypeError('Invalid UUID');
-  }
-
-  let v;
-  const arr = new Uint8Array(16); // Parse ########-....-....-....-............
-
-  arr[0] = (v = parseInt(uuid.slice(0, 8), 16)) >>> 24;
-  arr[1] = v >>> 16 & 0xff;
-  arr[2] = v >>> 8 & 0xff;
-  arr[3] = v & 0xff; // Parse ........-####-....-....-............
-
-  arr[4] = (v = parseInt(uuid.slice(9, 13), 16)) >>> 8;
-  arr[5] = v & 0xff; // Parse ........-....-####-....-............
-
-  arr[6] = (v = parseInt(uuid.slice(14, 18), 16)) >>> 8;
-  arr[7] = v & 0xff; // Parse ........-....-....-####-............
-
-  arr[8] = (v = parseInt(uuid.slice(19, 23), 16)) >>> 8;
-  arr[9] = v & 0xff; // Parse ........-....-....-....-############
-  // (Use "/" to avoid 32-bit truncation when bit-shifting high-order bytes)
-
-  arr[10] = (v = parseInt(uuid.slice(24, 36), 16)) / 0x10000000000 & 0xff;
-  arr[11] = v / 0x100000000 & 0xff;
-  arr[12] = v >>> 24 & 0xff;
-  arr[13] = v >>> 16 & 0xff;
-  arr[14] = v >>> 8 & 0xff;
-  arr[15] = v & 0xff;
-  return arr;
-}
-
-function stringToBytes(str) {
-  str = unescape(encodeURIComponent(str)); // UTF8 escape
-
-  const bytes = [];
-
-  for (let i = 0; i < str.length; ++i) {
-    bytes.push(str.charCodeAt(i));
-  }
-
-  return bytes;
-}
-
-const DNS = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
-const URL = '6ba7b811-9dad-11d1-80b4-00c04fd430c8';
-function v35(name, version, hashfunc) {
-  function generateUUID(value, namespace, buf, offset) {
-    var _namespace;
-
-    if (typeof value === 'string') {
-      value = stringToBytes(value);
-    }
-
-    if (typeof namespace === 'string') {
-      namespace = parse(namespace);
-    }
-
-    if (((_namespace = namespace) === null || _namespace === void 0 ? void 0 : _namespace.length) !== 16) {
-      throw TypeError('Namespace must be array-like (16 iterable integer values, 0-255)');
-    } // Compute hash of namespace and value, Per 4.3
-    // Future: Use spread syntax when supported on all platforms, e.g. `bytes =
-    // hashfunc([...namespace, ... value])`
-
-
-    let bytes = new Uint8Array(16 + value.length);
-    bytes.set(namespace);
-    bytes.set(value, namespace.length);
-    bytes = hashfunc(bytes);
-    bytes[6] = bytes[6] & 0x0f | version;
-    bytes[8] = bytes[8] & 0x3f | 0x80;
-
-    if (buf) {
-      offset = offset || 0;
-
-      for (let i = 0; i < 16; ++i) {
-        buf[offset + i] = bytes[i];
-      }
-
-      return buf;
-    }
-
-    return unsafeStringify(bytes);
-  } // Function#name is not settable on some platforms (#270)
-
-
-  try {
-    generateUUID.name = name; // eslint-disable-next-line no-empty
-  } catch (err) {} // For CommonJS default export support
-
-
-  generateUUID.DNS = DNS;
-  generateUUID.URL = URL;
-  return generateUUID;
-}
-
-/*
- * Browser-compatible JavaScript MD5
- *
- * Modification of JavaScript MD5
- * https://github.com/blueimp/JavaScript-MD5
- *
- * Copyright 2011, Sebastian Tschan
- * https://blueimp.net
- *
- * Licensed under the MIT license:
- * https://opensource.org/licenses/MIT
- *
- * Based on
- * A JavaScript implementation of the RSA Data Security, Inc. MD5 Message
- * Digest Algorithm, as defined in RFC 1321.
- * Version 2.2 Copyright (C) Paul Johnston 1999 - 2009
- * Other contributors: Greg Holt, Andrew Kepert, Ydnar, Lostinet
- * Distributed under the BSD License
- * See http://pajhome.org.uk/crypt/md5 for more info.
- */
-function md5(bytes) {
-  if (typeof bytes === 'string') {
-    const msg = unescape(encodeURIComponent(bytes)); // UTF8 escape
-
-    bytes = new Uint8Array(msg.length);
-
-    for (let i = 0; i < msg.length; ++i) {
-      bytes[i] = msg.charCodeAt(i);
-    }
-  }
-
-  return md5ToHexEncodedArray(wordsToMd5(bytesToWords(bytes), bytes.length * 8));
-}
-/*
- * Convert an array of little-endian words to an array of bytes
- */
-
-
-function md5ToHexEncodedArray(input) {
-  const output = [];
-  const length32 = input.length * 32;
-  const hexTab = '0123456789abcdef';
-
-  for (let i = 0; i < length32; i += 8) {
-    const x = input[i >> 5] >>> i % 32 & 0xff;
-    const hex = parseInt(hexTab.charAt(x >>> 4 & 0x0f) + hexTab.charAt(x & 0x0f), 16);
-    output.push(hex);
-  }
-
-  return output;
-}
-/**
- * Calculate output length with padding and bit length
- */
-
-
-function getOutputLength(inputLength8) {
-  return (inputLength8 + 64 >>> 9 << 4) + 14 + 1;
-}
-/*
- * Calculate the MD5 of an array of little-endian words, and a bit length.
- */
-
-
-function wordsToMd5(x, len) {
-  /* append padding */
-  x[len >> 5] |= 0x80 << len % 32;
-  x[getOutputLength(len) - 1] = len;
-  let a = 1732584193;
-  let b = -271733879;
-  let c = -1732584194;
-  let d = 271733878;
-
-  for (let i = 0; i < x.length; i += 16) {
-    const olda = a;
-    const oldb = b;
-    const oldc = c;
-    const oldd = d;
-    a = md5ff(a, b, c, d, x[i], 7, -680876936);
-    d = md5ff(d, a, b, c, x[i + 1], 12, -389564586);
-    c = md5ff(c, d, a, b, x[i + 2], 17, 606105819);
-    b = md5ff(b, c, d, a, x[i + 3], 22, -1044525330);
-    a = md5ff(a, b, c, d, x[i + 4], 7, -176418897);
-    d = md5ff(d, a, b, c, x[i + 5], 12, 1200080426);
-    c = md5ff(c, d, a, b, x[i + 6], 17, -1473231341);
-    b = md5ff(b, c, d, a, x[i + 7], 22, -45705983);
-    a = md5ff(a, b, c, d, x[i + 8], 7, 1770035416);
-    d = md5ff(d, a, b, c, x[i + 9], 12, -1958414417);
-    c = md5ff(c, d, a, b, x[i + 10], 17, -42063);
-    b = md5ff(b, c, d, a, x[i + 11], 22, -1990404162);
-    a = md5ff(a, b, c, d, x[i + 12], 7, 1804603682);
-    d = md5ff(d, a, b, c, x[i + 13], 12, -40341101);
-    c = md5ff(c, d, a, b, x[i + 14], 17, -1502002290);
-    b = md5ff(b, c, d, a, x[i + 15], 22, 1236535329);
-    a = md5gg(a, b, c, d, x[i + 1], 5, -165796510);
-    d = md5gg(d, a, b, c, x[i + 6], 9, -1069501632);
-    c = md5gg(c, d, a, b, x[i + 11], 14, 643717713);
-    b = md5gg(b, c, d, a, x[i], 20, -373897302);
-    a = md5gg(a, b, c, d, x[i + 5], 5, -701558691);
-    d = md5gg(d, a, b, c, x[i + 10], 9, 38016083);
-    c = md5gg(c, d, a, b, x[i + 15], 14, -660478335);
-    b = md5gg(b, c, d, a, x[i + 4], 20, -405537848);
-    a = md5gg(a, b, c, d, x[i + 9], 5, 568446438);
-    d = md5gg(d, a, b, c, x[i + 14], 9, -1019803690);
-    c = md5gg(c, d, a, b, x[i + 3], 14, -187363961);
-    b = md5gg(b, c, d, a, x[i + 8], 20, 1163531501);
-    a = md5gg(a, b, c, d, x[i + 13], 5, -1444681467);
-    d = md5gg(d, a, b, c, x[i + 2], 9, -51403784);
-    c = md5gg(c, d, a, b, x[i + 7], 14, 1735328473);
-    b = md5gg(b, c, d, a, x[i + 12], 20, -1926607734);
-    a = md5hh(a, b, c, d, x[i + 5], 4, -378558);
-    d = md5hh(d, a, b, c, x[i + 8], 11, -2022574463);
-    c = md5hh(c, d, a, b, x[i + 11], 16, 1839030562);
-    b = md5hh(b, c, d, a, x[i + 14], 23, -35309556);
-    a = md5hh(a, b, c, d, x[i + 1], 4, -1530992060);
-    d = md5hh(d, a, b, c, x[i + 4], 11, 1272893353);
-    c = md5hh(c, d, a, b, x[i + 7], 16, -155497632);
-    b = md5hh(b, c, d, a, x[i + 10], 23, -1094730640);
-    a = md5hh(a, b, c, d, x[i + 13], 4, 681279174);
-    d = md5hh(d, a, b, c, x[i], 11, -358537222);
-    c = md5hh(c, d, a, b, x[i + 3], 16, -722521979);
-    b = md5hh(b, c, d, a, x[i + 6], 23, 76029189);
-    a = md5hh(a, b, c, d, x[i + 9], 4, -640364487);
-    d = md5hh(d, a, b, c, x[i + 12], 11, -421815835);
-    c = md5hh(c, d, a, b, x[i + 15], 16, 530742520);
-    b = md5hh(b, c, d, a, x[i + 2], 23, -995338651);
-    a = md5ii(a, b, c, d, x[i], 6, -198630844);
-    d = md5ii(d, a, b, c, x[i + 7], 10, 1126891415);
-    c = md5ii(c, d, a, b, x[i + 14], 15, -1416354905);
-    b = md5ii(b, c, d, a, x[i + 5], 21, -57434055);
-    a = md5ii(a, b, c, d, x[i + 12], 6, 1700485571);
-    d = md5ii(d, a, b, c, x[i + 3], 10, -1894986606);
-    c = md5ii(c, d, a, b, x[i + 10], 15, -1051523);
-    b = md5ii(b, c, d, a, x[i + 1], 21, -2054922799);
-    a = md5ii(a, b, c, d, x[i + 8], 6, 1873313359);
-    d = md5ii(d, a, b, c, x[i + 15], 10, -30611744);
-    c = md5ii(c, d, a, b, x[i + 6], 15, -1560198380);
-    b = md5ii(b, c, d, a, x[i + 13], 21, 1309151649);
-    a = md5ii(a, b, c, d, x[i + 4], 6, -145523070);
-    d = md5ii(d, a, b, c, x[i + 11], 10, -1120210379);
-    c = md5ii(c, d, a, b, x[i + 2], 15, 718787259);
-    b = md5ii(b, c, d, a, x[i + 9], 21, -343485551);
-    a = safeAdd(a, olda);
-    b = safeAdd(b, oldb);
-    c = safeAdd(c, oldc);
-    d = safeAdd(d, oldd);
-  }
-
-  return [a, b, c, d];
-}
-/*
- * Convert an array bytes to an array of little-endian words
- * Characters >255 have their high-byte silently ignored.
- */
-
-
-function bytesToWords(input) {
-  if (input.length === 0) {
-    return [];
-  }
-
-  const length8 = input.length * 8;
-  const output = new Uint32Array(getOutputLength(length8));
-
-  for (let i = 0; i < length8; i += 8) {
-    output[i >> 5] |= (input[i / 8] & 0xff) << i % 32;
-  }
-
-  return output;
-}
-/*
- * Add integers, wrapping at 2^32. This uses 16-bit operations internally
- * to work around bugs in some JS interpreters.
- */
-
-
-function safeAdd(x, y) {
-  const lsw = (x & 0xffff) + (y & 0xffff);
-  const msw = (x >> 16) + (y >> 16) + (lsw >> 16);
-  return msw << 16 | lsw & 0xffff;
-}
-/*
- * Bitwise rotate a 32-bit number to the left.
- */
-
-
-function bitRotateLeft(num, cnt) {
-  return num << cnt | num >>> 32 - cnt;
-}
-/*
- * These functions implement the four basic operations the algorithm uses.
- */
-
-
-function md5cmn(q, a, b, x, s, t) {
-  return safeAdd(bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s), b);
-}
-
-function md5ff(a, b, c, d, x, s, t) {
-  return md5cmn(b & c | ~b & d, a, b, x, s, t);
-}
-
-function md5gg(a, b, c, d, x, s, t) {
-  return md5cmn(b & d | c & ~d, a, b, x, s, t);
-}
-
-function md5hh(a, b, c, d, x, s, t) {
-  return md5cmn(b ^ c ^ d, a, b, x, s, t);
-}
-
-function md5ii(a, b, c, d, x, s, t) {
-  return md5cmn(c ^ (b | ~d), a, b, x, s, t);
-}
-
-const v3 = v35('v3', 0x30, md5);
 
 const randomUUID = typeof crypto !== 'undefined' && crypto.randomUUID && crypto.randomUUID.bind(crypto);
 const native = {
@@ -491,115 +67,7 @@ function v4(options, buf, offset) {
   return unsafeStringify(rnds);
 }
 
-// Adapted from Chris Veness' SHA1 code at
-// http://www.movable-type.co.uk/scripts/sha1.html
-function f(s, x, y, z) {
-  switch (s) {
-    case 0:
-      return x & y ^ ~x & z;
-
-    case 1:
-      return x ^ y ^ z;
-
-    case 2:
-      return x & y ^ x & z ^ y & z;
-
-    case 3:
-      return x ^ y ^ z;
-  }
-}
-
-function ROTL(x, n) {
-  return x << n | x >>> 32 - n;
-}
-
-function sha1(bytes) {
-  const K = [0x5a827999, 0x6ed9eba1, 0x8f1bbcdc, 0xca62c1d6];
-  const H = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0];
-
-  if (typeof bytes === 'string') {
-    const msg = unescape(encodeURIComponent(bytes)); // UTF8 escape
-
-    bytes = [];
-
-    for (let i = 0; i < msg.length; ++i) {
-      bytes.push(msg.charCodeAt(i));
-    }
-  } else if (!Array.isArray(bytes)) {
-    // Convert Array-like to Array
-    bytes = Array.prototype.slice.call(bytes);
-  }
-
-  bytes.push(0x80);
-  const l = bytes.length / 4 + 2;
-  const N = Math.ceil(l / 16);
-  const M = new Array(N);
-
-  for (let i = 0; i < N; ++i) {
-    const arr = new Uint32Array(16);
-
-    for (let j = 0; j < 16; ++j) {
-      arr[j] = bytes[i * 64 + j * 4] << 24 | bytes[i * 64 + j * 4 + 1] << 16 | bytes[i * 64 + j * 4 + 2] << 8 | bytes[i * 64 + j * 4 + 3];
-    }
-
-    M[i] = arr;
-  }
-
-  M[N - 1][14] = (bytes.length - 1) * 8 / Math.pow(2, 32);
-  M[N - 1][14] = Math.floor(M[N - 1][14]);
-  M[N - 1][15] = (bytes.length - 1) * 8 & 0xffffffff;
-
-  for (let i = 0; i < N; ++i) {
-    const W = new Uint32Array(80);
-
-    for (let t = 0; t < 16; ++t) {
-      W[t] = M[i][t];
-    }
-
-    for (let t = 16; t < 80; ++t) {
-      W[t] = ROTL(W[t - 3] ^ W[t - 8] ^ W[t - 14] ^ W[t - 16], 1);
-    }
-
-    let a = H[0];
-    let b = H[1];
-    let c = H[2];
-    let d = H[3];
-    let e = H[4];
-
-    for (let t = 0; t < 80; ++t) {
-      const s = Math.floor(t / 20);
-      const T = ROTL(a, 5) + f(s, b, c, d) + e + K[s] + W[t] >>> 0;
-      e = d;
-      d = c;
-      c = ROTL(b, 30) >>> 0;
-      b = a;
-      a = T;
-    }
-
-    H[0] = H[0] + a >>> 0;
-    H[1] = H[1] + b >>> 0;
-    H[2] = H[2] + c >>> 0;
-    H[3] = H[3] + d >>> 0;
-    H[4] = H[4] + e >>> 0;
-  }
-
-  return [H[0] >> 24 & 0xff, H[0] >> 16 & 0xff, H[0] >> 8 & 0xff, H[0] & 0xff, H[1] >> 24 & 0xff, H[1] >> 16 & 0xff, H[1] >> 8 & 0xff, H[1] & 0xff, H[2] >> 24 & 0xff, H[2] >> 16 & 0xff, H[2] >> 8 & 0xff, H[2] & 0xff, H[3] >> 24 & 0xff, H[3] >> 16 & 0xff, H[3] >> 8 & 0xff, H[3] & 0xff, H[4] >> 24 & 0xff, H[4] >> 16 & 0xff, H[4] >> 8 & 0xff, H[4] & 0xff];
-}
-
-const v5 = v35('v5', 0x50, sha1);
-
-const nil = '00000000-0000-0000-0000-000000000000';
-
-function version(uuid) {
-  if (!validate(uuid)) {
-    throw TypeError('Invalid UUID');
-  }
-
-  return parseInt(uuid.slice(14, 15), 16);
-}
-
 var Barcode_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -618,10 +86,7 @@ var Barcode = function Barcode(data, options) {
 exports.default = Barcode;
 });
 
-const Barcode = /*@__PURE__*/getDefaultExportFromCjs(Barcode_1);
-
 var CODE39_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -728,10 +193,7 @@ function mod43checksum(data) {
 exports.CODE39 = CODE39;
 });
 
-const index$9 = /*@__PURE__*/getDefaultExportFromCjs(CODE39_1);
-
-var constants$4 = createCommonjsModule(function (module, exports) {
-"use strict";
+var constants$2 = createCommonjsModule(function (module, exports) {
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -747,50 +209,47 @@ var SET_B = exports.SET_B = 1;
 var SET_C = exports.SET_C = 2;
 
 // Special characters
-var SHIFT = exports.SHIFT = 98;
+exports.SHIFT = 98;
 var START_A = exports.START_A = 103;
 var START_B = exports.START_B = 104;
 var START_C = exports.START_C = 105;
-var MODULO = exports.MODULO = 103;
-var STOP = exports.STOP = 106;
-var FNC1 = exports.FNC1 = 207;
+exports.MODULO = 103;
+exports.STOP = 106;
+exports.FNC1 = 207;
 
 // Get set by start code
-var SET_BY_CODE = exports.SET_BY_CODE = (_SET_BY_CODE = {}, _defineProperty(_SET_BY_CODE, START_A, SET_A), _defineProperty(_SET_BY_CODE, START_B, SET_B), _defineProperty(_SET_BY_CODE, START_C, SET_C), _SET_BY_CODE);
+exports.SET_BY_CODE = (_SET_BY_CODE = {}, _defineProperty(_SET_BY_CODE, START_A, SET_A), _defineProperty(_SET_BY_CODE, START_B, SET_B), _defineProperty(_SET_BY_CODE, START_C, SET_C), _SET_BY_CODE);
 
 // Get next set by code
-var SWAP = exports.SWAP = {
+exports.SWAP = {
 	101: SET_A,
 	100: SET_B,
 	99: SET_C
 };
 
-var A_START_CHAR = exports.A_START_CHAR = String.fromCharCode(208); // START_A + 105
-var B_START_CHAR = exports.B_START_CHAR = String.fromCharCode(209); // START_B + 105
-var C_START_CHAR = exports.C_START_CHAR = String.fromCharCode(210); // START_C + 105
+exports.A_START_CHAR = String.fromCharCode(208); // START_A + 105
+exports.B_START_CHAR = String.fromCharCode(209); // START_B + 105
+exports.C_START_CHAR = String.fromCharCode(210); // START_C + 105
 
 // 128A (Code Set A)
 // ASCII characters 00 to 95 (0–9, A–Z and control codes), special characters, and FNC 1–4
-var A_CHARS = exports.A_CHARS = "[\x00-\x5F\xC8-\xCF]";
+exports.A_CHARS = "[\x00-\x5F\xC8-\xCF]";
 
 // 128B (Code Set B)
 // ASCII characters 32 to 127 (0–9, A–Z, a–z), special characters, and FNC 1–4
-var B_CHARS = exports.B_CHARS = "[\x20-\x7F\xC8-\xCF]";
+exports.B_CHARS = "[\x20-\x7F\xC8-\xCF]";
 
 // 128C (Code Set C)
 // 00–99 (encodes two digits with a single code point) and FNC1
-var C_CHARS = exports.C_CHARS = "(\xCF*[0-9]{2}\xCF*)";
+exports.C_CHARS = "(\xCF*[0-9]{2}\xCF*)";
 
 // CODE128 includes 107 symbols:
 // 103 data symbols, 3 start symbols (A, B and C), and 1 stop symbol (the last one)
 // Each symbol consist of three black bars (1) and three white spaces (0).
-var BARS = exports.BARS = [11011001100, 11001101100, 11001100110, 10010011000, 10010001100, 10001001100, 10011001000, 10011000100, 10001100100, 11001001000, 11001000100, 11000100100, 10110011100, 10011011100, 10011001110, 10111001100, 10011101100, 10011100110, 11001110010, 11001011100, 11001001110, 11011100100, 11001110100, 11101101110, 11101001100, 11100101100, 11100100110, 11101100100, 11100110100, 11100110010, 11011011000, 11011000110, 11000110110, 10100011000, 10001011000, 10001000110, 10110001000, 10001101000, 10001100010, 11010001000, 11000101000, 11000100010, 10110111000, 10110001110, 10001101110, 10111011000, 10111000110, 10001110110, 11101110110, 11010001110, 11000101110, 11011101000, 11011100010, 11011101110, 11101011000, 11101000110, 11100010110, 11101101000, 11101100010, 11100011010, 11101111010, 11001000010, 11110001010, 10100110000, 10100001100, 10010110000, 10010000110, 10000101100, 10000100110, 10110010000, 10110000100, 10011010000, 10011000010, 10000110100, 10000110010, 11000010010, 11001010000, 11110111010, 11000010100, 10001111010, 10100111100, 10010111100, 10010011110, 10111100100, 10011110100, 10011110010, 11110100100, 11110010100, 11110010010, 11011011110, 11011110110, 11110110110, 10101111000, 10100011110, 10001011110, 10111101000, 10111100010, 11110101000, 11110100010, 10111011110, 10111101110, 11101011110, 11110101110, 11010000100, 11010010000, 11010011100, 1100011101011];
+exports.BARS = [11011001100, 11001101100, 11001100110, 10010011000, 10010001100, 10001001100, 10011001000, 10011000100, 10001100100, 11001001000, 11001000100, 11000100100, 10110011100, 10011011100, 10011001110, 10111001100, 10011101100, 10011100110, 11001110010, 11001011100, 11001001110, 11011100100, 11001110100, 11101101110, 11101001100, 11100101100, 11100100110, 11101100100, 11100110100, 11100110010, 11011011000, 11011000110, 11000110110, 10100011000, 10001011000, 10001000110, 10110001000, 10001101000, 10001100010, 11010001000, 11000101000, 11000100010, 10110111000, 10110001110, 10001101110, 10111011000, 10111000110, 10001110110, 11101110110, 11010001110, 11000101110, 11011101000, 11011100010, 11011101110, 11101011000, 11101000110, 11100010110, 11101101000, 11101100010, 11100011010, 11101111010, 11001000010, 11110001010, 10100110000, 10100001100, 10010110000, 10010000110, 10000101100, 10000100110, 10110010000, 10110000100, 10011010000, 10011000010, 10000110100, 10000110010, 11000010010, 11001010000, 11110111010, 11000010100, 10001111010, 10100111100, 10010111100, 10010011110, 10111100100, 10011110100, 10011110010, 11110100100, 11110010100, 11110010010, 11011011110, 11011110110, 11110110110, 10101111000, 10100011110, 10001011110, 10111101000, 10111100010, 11110101000, 11110100010, 10111011110, 10111101110, 11101011110, 11110101110, 11010000100, 11010010000, 11010011100, 1100011101011];
 });
 
-const constants$5 = /*@__PURE__*/getDefaultExportFromCjs(constants$4);
-
 var CODE128_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -846,14 +305,14 @@ var CODE128 = function (_Barcode) {
 			// Remove the start code from the bytes and set its index
 			var startIndex = bytes.shift() - 105;
 			// Get start set by index
-			var startSet = constants$4.SET_BY_CODE[startIndex];
+			var startSet = constants$2.SET_BY_CODE[startIndex];
 
 			if (startSet === undefined) {
 				throw new RangeError('The encoding does not start with a start character.');
 			}
 
 			if (this.shouldEncodeAsEan128() === true) {
-				bytes.unshift(constants$4.FNC1);
+				bytes.unshift(constants$2.FNC1);
 			}
 
 			// Start encode with the right type
@@ -867,9 +326,9 @@ var CODE128 = function (_Barcode) {
 				// Add the encoded bits
 				encodingResult.result +
 				// Add the checksum
-				CODE128.getBar((encodingResult.checksum + startIndex) % constants$4.MODULO) +
+				CODE128.getBar((encodingResult.checksum + startIndex) % constants$2.MODULO) +
 				// Add the end bits
-				CODE128.getBar(constants$4.STOP)
+				CODE128.getBar(constants$2.STOP)
 			};
 		}
 
@@ -890,7 +349,7 @@ var CODE128 = function (_Barcode) {
 	}], [{
 		key: 'getBar',
 		value: function getBar(index) {
-			return constants$4.BARS[index] ? constants$4.BARS[index].toString() : '';
+			return constants$2.BARS[index] ? constants$2.BARS[index].toString() : '';
 		}
 
 		// Correct an index by a set and shift it from the bytes array
@@ -898,10 +357,10 @@ var CODE128 = function (_Barcode) {
 	}, {
 		key: 'correctIndex',
 		value: function correctIndex(bytes, set) {
-			if (set === constants$4.SET_A) {
+			if (set === constants$2.SET_A) {
 				var charCode = bytes.shift();
 				return charCode < 32 ? charCode + 64 : charCode - 32;
-			} else if (set === constants$4.SET_B) {
+			} else if (set === constants$2.SET_B) {
 				return bytes.shift() - 32;
 			} else {
 				return (bytes.shift() - 48) * 10 + bytes.shift() - 48;
@@ -920,7 +379,7 @@ var CODE128 = function (_Barcode) {
 			// Special characters
 			if (bytes[0] >= 200) {
 				index = bytes.shift() - 105;
-				var nextSet = constants$4.SWAP[index];
+				var nextSet = constants$2.SWAP[index];
 
 				// Swap to other set
 				if (nextSet !== undefined) {
@@ -929,9 +388,9 @@ var CODE128 = function (_Barcode) {
 				// Continue on current set but encode a special character
 				else {
 						// Shift
-						if ((set === constants$4.SET_A || set === constants$4.SET_B) && index === constants$4.SHIFT) {
+						if ((set === constants$2.SET_A || set === constants$2.SET_B) && index === constants$2.SHIFT) {
 							// Convert the next character so that is encoded correctly
-							bytes[0] = set === constants$4.SET_A ? bytes[0] > 95 ? bytes[0] - 96 : bytes[0] : bytes[0] < 32 ? bytes[0] + 96 : bytes[0];
+							bytes[0] = set === constants$2.SET_A ? bytes[0] > 95 ? bytes[0] - 96 : bytes[0] : bytes[0] < 32 ? bytes[0] + 96 : bytes[0];
 						}
 						nextCode = CODE128.next(bytes, pos + 1, set);
 					}
@@ -959,10 +418,7 @@ var CODE128 = function (_Barcode) {
 exports.default = CODE128;
 });
 
-const CODE128$1 = /*@__PURE__*/getDefaultExportFromCjs(CODE128_1);
-
 var auto = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -972,18 +428,18 @@ Object.defineProperty(exports, "__esModule", {
 
 // Match Set functions
 var matchSetALength = function matchSetALength(string) {
-	return string.match(new RegExp('^' + constants$4.A_CHARS + '*'))[0].length;
+	return string.match(new RegExp('^' + constants$2.A_CHARS + '*'))[0].length;
 };
 var matchSetBLength = function matchSetBLength(string) {
-	return string.match(new RegExp('^' + constants$4.B_CHARS + '*'))[0].length;
+	return string.match(new RegExp('^' + constants$2.B_CHARS + '*'))[0].length;
 };
 var matchSetC = function matchSetC(string) {
-	return string.match(new RegExp('^' + constants$4.C_CHARS + '*'))[0];
+	return string.match(new RegExp('^' + constants$2.C_CHARS + '*'))[0];
 };
 
 // CODE128A or CODE128B
 function autoSelectFromAB(string, isA) {
-	var ranges = isA ? constants$4.A_CHARS : constants$4.B_CHARS;
+	var ranges = isA ? constants$2.A_CHARS : constants$2.B_CHARS;
 	var untilC = string.match(new RegExp('^(' + ranges + '+?)(([0-9]{2}){2,})([^0-9]|$)'));
 
 	if (untilC) {
@@ -1023,11 +479,11 @@ exports.default = function (string) {
 
 	// Select 128C if the string start with enough digits
 	if (cLength >= 2) {
-		newString = constants$4.C_START_CHAR + autoSelectFromC(string);
+		newString = constants$2.C_START_CHAR + autoSelectFromC(string);
 	} else {
 		// Select A/B depending on the longest match
 		var isA = matchSetALength(string) > matchSetBLength(string);
-		newString = (isA ? constants$4.A_START_CHAR : constants$4.B_START_CHAR) + autoSelectFromAB(string, isA);
+		newString = (isA ? constants$2.A_START_CHAR : constants$2.B_START_CHAR) + autoSelectFromAB(string, isA);
 	}
 
 	return newString.replace(/[\xCD\xCE]([^])[\xCD\xCE]/, // Any sequence between 205 and 206 characters
@@ -1037,10 +493,7 @@ exports.default = function (string) {
 };
 });
 
-const auto$1 = /*@__PURE__*/getDefaultExportFromCjs(auto);
-
 var CODE128_AUTO = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1083,10 +536,7 @@ var CODE128AUTO = function (_CODE) {
 exports.default = CODE128AUTO;
 });
 
-const CODE128_AUTO$1 = /*@__PURE__*/getDefaultExportFromCjs(CODE128_AUTO);
-
 var CODE128A_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1114,13 +564,13 @@ var CODE128A = function (_CODE) {
 	function CODE128A(string, options) {
 		_classCallCheck(this, CODE128A);
 
-		return _possibleConstructorReturn(this, (CODE128A.__proto__ || Object.getPrototypeOf(CODE128A)).call(this, constants$4.A_START_CHAR + string, options));
+		return _possibleConstructorReturn(this, (CODE128A.__proto__ || Object.getPrototypeOf(CODE128A)).call(this, constants$2.A_START_CHAR + string, options));
 	}
 
 	_createClass(CODE128A, [{
 		key: 'valid',
 		value: function valid() {
-			return new RegExp('^' + constants$4.A_CHARS + '+$').test(this.data);
+			return new RegExp('^' + constants$2.A_CHARS + '+$').test(this.data);
 		}
 	}]);
 
@@ -1130,10 +580,7 @@ var CODE128A = function (_CODE) {
 exports.default = CODE128A;
 });
 
-const CODE128A = /*@__PURE__*/getDefaultExportFromCjs(CODE128A_1);
-
 var CODE128B_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1161,13 +608,13 @@ var CODE128B = function (_CODE) {
 	function CODE128B(string, options) {
 		_classCallCheck(this, CODE128B);
 
-		return _possibleConstructorReturn(this, (CODE128B.__proto__ || Object.getPrototypeOf(CODE128B)).call(this, constants$4.B_START_CHAR + string, options));
+		return _possibleConstructorReturn(this, (CODE128B.__proto__ || Object.getPrototypeOf(CODE128B)).call(this, constants$2.B_START_CHAR + string, options));
 	}
 
 	_createClass(CODE128B, [{
 		key: 'valid',
 		value: function valid() {
-			return new RegExp('^' + constants$4.B_CHARS + '+$').test(this.data);
+			return new RegExp('^' + constants$2.B_CHARS + '+$').test(this.data);
 		}
 	}]);
 
@@ -1177,10 +624,7 @@ var CODE128B = function (_CODE) {
 exports.default = CODE128B;
 });
 
-const CODE128B = /*@__PURE__*/getDefaultExportFromCjs(CODE128B_1);
-
 var CODE128C_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1208,13 +652,13 @@ var CODE128C = function (_CODE) {
 	function CODE128C(string, options) {
 		_classCallCheck(this, CODE128C);
 
-		return _possibleConstructorReturn(this, (CODE128C.__proto__ || Object.getPrototypeOf(CODE128C)).call(this, constants$4.C_START_CHAR + string, options));
+		return _possibleConstructorReturn(this, (CODE128C.__proto__ || Object.getPrototypeOf(CODE128C)).call(this, constants$2.C_START_CHAR + string, options));
 	}
 
 	_createClass(CODE128C, [{
 		key: 'valid',
 		value: function valid() {
-			return new RegExp('^' + constants$4.C_CHARS + '+$').test(this.data);
+			return new RegExp('^' + constants$2.C_CHARS + '+$').test(this.data);
 		}
 	}]);
 
@@ -1224,10 +668,7 @@ var CODE128C = function (_CODE) {
 exports.default = CODE128C;
 });
 
-const CODE128C = /*@__PURE__*/getDefaultExportFromCjs(CODE128C_1);
-
 var CODE128 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
   value: true
@@ -1258,19 +699,16 @@ exports.CODE128B = _CODE128B2.default;
 exports.CODE128C = _CODE128C2.default;
 });
 
-const index$8 = /*@__PURE__*/getDefaultExportFromCjs(CODE128);
-
-var constants$2 = createCommonjsModule(function (module, exports) {
-'use strict';
+var constants$1 = createCommonjsModule(function (module, exports) {
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
 // Standard start end and middle bits
-var SIDE_BIN = exports.SIDE_BIN = '101';
-var MIDDLE_BIN = exports.MIDDLE_BIN = '01010';
+exports.SIDE_BIN = '101';
+exports.MIDDLE_BIN = '01010';
 
-var BINARIES = exports.BINARIES = {
+exports.BINARIES = {
 	'L': [// The L (left) type of encoding
 	'0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011'],
 	'G': [// The G type of encoding
@@ -1284,19 +722,16 @@ var BINARIES = exports.BINARIES = {
 };
 
 // Define the EAN-2 structure
-var EAN2_STRUCTURE = exports.EAN2_STRUCTURE = ['LL', 'LG', 'GL', 'GG'];
+exports.EAN2_STRUCTURE = ['LL', 'LG', 'GL', 'GG'];
 
 // Define the EAN-5 structure
-var EAN5_STRUCTURE = exports.EAN5_STRUCTURE = ['GGLLL', 'GLGLL', 'GLLGL', 'GLLLG', 'LGGLL', 'LLGGL', 'LLLGG', 'LGLGL', 'LGLLG', 'LLGLG'];
+exports.EAN5_STRUCTURE = ['GGLLL', 'GLGLL', 'GLLGL', 'GLLLG', 'LGGLL', 'LLGGL', 'LLLGG', 'LGLGL', 'LGLLG', 'LLGLG'];
 
 // Define the EAN-13 structure
-var EAN13_STRUCTURE = exports.EAN13_STRUCTURE = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'];
+exports.EAN13_STRUCTURE = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'];
 });
 
-const constants$3 = /*@__PURE__*/getDefaultExportFromCjs(constants$2);
-
 var encoder = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1307,7 +742,7 @@ Object.defineProperty(exports, "__esModule", {
 // Encode data string
 var encode = function encode(data, structure, separator) {
 	var encoded = data.split('').map(function (val, idx) {
-		return constants$2.BINARIES[structure[idx]];
+		return constants$1.BINARIES[structure[idx]];
 	}).map(function (val, idx) {
 		return val ? val[data[idx]] : '';
 	});
@@ -1325,10 +760,7 @@ var encode = function encode(data, structure, separator) {
 exports.default = encode;
 });
 
-const encoder$1 = /*@__PURE__*/getDefaultExportFromCjs(encoder);
-
 var EAN_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1402,12 +834,12 @@ var EAN = function (_Barcode) {
 			var textOptions = { fontSize: this.fontSize };
 			var guardOptions = { height: this.guardHeight };
 
-			return [{ data: constants$2.SIDE_BIN, options: guardOptions }, { data: this.leftEncode(), text: this.leftText(), options: textOptions }, { data: constants$2.MIDDLE_BIN, options: guardOptions }, { data: this.rightEncode(), text: this.rightText(), options: textOptions }, { data: constants$2.SIDE_BIN, options: guardOptions }];
+			return [{ data: constants$1.SIDE_BIN, options: guardOptions }, { data: this.leftEncode(), text: this.leftText(), options: textOptions }, { data: constants$1.MIDDLE_BIN, options: guardOptions }, { data: this.rightEncode(), text: this.rightText(), options: textOptions }, { data: constants$1.SIDE_BIN, options: guardOptions }];
 		}
 	}, {
 		key: 'encodeFlat',
 		value: function encodeFlat() {
-			var data = [constants$2.SIDE_BIN, this.leftEncode(), constants$2.MIDDLE_BIN, this.rightEncode(), constants$2.SIDE_BIN];
+			var data = [constants$1.SIDE_BIN, this.leftEncode(), constants$1.MIDDLE_BIN, this.rightEncode(), constants$1.SIDE_BIN];
 
 			return {
 				data: data.join(''),
@@ -1422,10 +854,7 @@ var EAN = function (_Barcode) {
 exports.default = EAN;
 });
 
-const EAN = /*@__PURE__*/getDefaultExportFromCjs(EAN_1);
-
 var EAN13_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1494,7 +923,7 @@ var EAN13 = function (_EAN) {
 		key: 'leftEncode',
 		value: function leftEncode() {
 			var data = this.data.substr(1, 6);
-			var structure = constants$2.EAN13_STRUCTURE[this.data[0]];
+			var structure = constants$1.EAN13_STRUCTURE[this.data[0]];
 			return _get(EAN13.prototype.__proto__ || Object.getPrototypeOf(EAN13.prototype), 'leftEncode', this).call(this, data, structure);
 		}
 	}, {
@@ -1546,10 +975,7 @@ var EAN13 = function (_EAN) {
 exports.default = EAN13;
 });
 
-const EAN13 = /*@__PURE__*/getDefaultExportFromCjs(EAN13_1);
-
 var EAN8_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1632,10 +1058,7 @@ var EAN8 = function (_EAN) {
 exports.default = EAN8;
 });
 
-const EAN8 = /*@__PURE__*/getDefaultExportFromCjs(EAN8_1);
-
 var EAN5_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1688,7 +1111,7 @@ var EAN5 = function (_Barcode) {
 	}, {
 		key: 'encode',
 		value: function encode() {
-			var structure = constants$2.EAN5_STRUCTURE[checksum(this.data)];
+			var structure = constants$1.EAN5_STRUCTURE[checksum(this.data)];
 			return {
 				data: '1011' + (0, _encoder2.default)(this.data, structure, '01'),
 				text: this.text
@@ -1702,10 +1125,7 @@ var EAN5 = function (_Barcode) {
 exports.default = EAN5;
 });
 
-const EAN5 = /*@__PURE__*/getDefaultExportFromCjs(EAN5_1);
-
 var EAN2_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1750,7 +1170,7 @@ var EAN2 = function (_Barcode) {
 		key: 'encode',
 		value: function encode() {
 			// Choose the structure based on the number mod 4
-			var structure = constants$2.EAN2_STRUCTURE[parseInt(this.data) % 4];
+			var structure = constants$1.EAN2_STRUCTURE[parseInt(this.data) % 4];
 			return {
 				// Start bits + Encode the two digits with 01 in between
 				data: '1011' + (0, _encoder2.default)(this.data, structure, '01'),
@@ -1765,10 +1185,7 @@ var EAN2 = function (_Barcode) {
 exports.default = EAN2;
 });
 
-const EAN2 = /*@__PURE__*/getDefaultExportFromCjs(EAN2_1);
-
 var UPC_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -1935,10 +1352,7 @@ function checksum(number) {
 exports.default = UPC;
 });
 
-const UPC = /*@__PURE__*/getDefaultExportFromCjs(UPC_1);
-
 var UPCE_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2125,10 +1539,7 @@ function expandToUPCA(middleDigits, numberSystem) {
 exports.default = UPCE;
 });
 
-const UPCE = /*@__PURE__*/getDefaultExportFromCjs(UPCE_1);
-
 var EAN_UPC = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
   value: true
@@ -2169,24 +1580,18 @@ exports.UPC = _UPC2.default;
 exports.UPCE = _UPCE2.default;
 });
 
-const index$7 = /*@__PURE__*/getDefaultExportFromCjs(EAN_UPC);
-
 var constants = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
 });
-var START_BIN = exports.START_BIN = '1010';
-var END_BIN = exports.END_BIN = '11101';
+exports.START_BIN = '1010';
+exports.END_BIN = '11101';
 
-var BINARIES = exports.BINARIES = ['00110', '10001', '01001', '11000', '00101', '10100', '01100', '00011', '10010', '01010'];
+exports.BINARIES = ['00110', '10001', '01001', '11000', '00101', '10100', '01100', '00011', '10010', '01010'];
 });
 
-const constants$1 = /*@__PURE__*/getDefaultExportFromCjs(constants);
-
 var ITF_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2257,10 +1662,7 @@ var ITF = function (_Barcode) {
 exports.default = ITF;
 });
 
-const ITF$1 = /*@__PURE__*/getDefaultExportFromCjs(ITF_1);
-
 var ITF14_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2317,10 +1719,7 @@ var ITF14 = function (_ITF) {
 exports.default = ITF14;
 });
 
-const ITF14 = /*@__PURE__*/getDefaultExportFromCjs(ITF14_1);
-
 var ITF = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
   value: true
@@ -2341,10 +1740,7 @@ exports.ITF = _ITF2.default;
 exports.ITF14 = _ITF4.default;
 });
 
-const index$6 = /*@__PURE__*/getDefaultExportFromCjs(ITF);
-
 var MSI_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2420,10 +1816,7 @@ function addZeroes(number, n) {
 exports.default = MSI;
 });
 
-const MSI$1 = /*@__PURE__*/getDefaultExportFromCjs(MSI_1);
-
 var checksums = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2454,10 +1847,7 @@ function mod11(number) {
 }
 });
 
-const checksums$1 = /*@__PURE__*/getDefaultExportFromCjs(checksums);
-
 var MSI10_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2492,10 +1882,7 @@ var MSI10 = function (_MSI) {
 exports.default = MSI10;
 });
 
-const MSI10 = /*@__PURE__*/getDefaultExportFromCjs(MSI10_1);
-
 var MSI11_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2530,10 +1917,7 @@ var MSI11 = function (_MSI) {
 exports.default = MSI11;
 });
 
-const MSI11 = /*@__PURE__*/getDefaultExportFromCjs(MSI11_1);
-
 var MSI1010_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2570,10 +1954,7 @@ var MSI1010 = function (_MSI) {
 exports.default = MSI1010;
 });
 
-const MSI1010 = /*@__PURE__*/getDefaultExportFromCjs(MSI1010_1);
-
 var MSI1110_1 = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2610,10 +1991,7 @@ var MSI1110 = function (_MSI) {
 exports.default = MSI1110;
 });
 
-const MSI1110 = /*@__PURE__*/getDefaultExportFromCjs(MSI1110_1);
-
 var MSI = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
   value: true
@@ -2649,10 +2027,7 @@ exports.MSI1010 = _MSI8.default;
 exports.MSI1110 = _MSI10.default;
 });
 
-const index$5 = /*@__PURE__*/getDefaultExportFromCjs(MSI);
-
 var pharmacode_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2727,10 +2102,7 @@ var pharmacode = function (_Barcode) {
 exports.pharmacode = pharmacode;
 });
 
-const index$4 = /*@__PURE__*/getDefaultExportFromCjs(pharmacode_1);
-
 var codabar_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2824,10 +2196,7 @@ var codabar = function (_Barcode) {
 exports.codabar = codabar;
 });
 
-const index$3 = /*@__PURE__*/getDefaultExportFromCjs(codabar_1);
-
 var GenericBarcode_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2884,10 +2253,7 @@ var GenericBarcode = function (_Barcode) {
 exports.GenericBarcode = GenericBarcode;
 });
 
-const index$2 = /*@__PURE__*/getDefaultExportFromCjs(GenericBarcode_1);
-
 var barcodes = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2922,10 +2288,7 @@ exports.default = {
 };
 });
 
-const index$1 = /*@__PURE__*/getDefaultExportFromCjs(barcodes);
-
 var merge = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
@@ -2938,10 +2301,7 @@ exports.default = function (old, replaceObj) {
 };
 });
 
-const merge$1 = /*@__PURE__*/getDefaultExportFromCjs(merge);
-
 var linearizeEncodings_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2970,10 +2330,7 @@ function linearizeEncodings(encodings) {
 }
 });
 
-const linearizeEncodings = /*@__PURE__*/getDefaultExportFromCjs(linearizeEncodings_1);
-
 var fixOptions_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -2992,10 +2349,7 @@ function fixOptions(options) {
 }
 });
 
-const fixOptions = /*@__PURE__*/getDefaultExportFromCjs(fixOptions_1);
-
 var optionsFromStrings_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -3024,10 +2378,7 @@ function optionsFromStrings(options) {
 }
 });
 
-const optionsFromStrings = /*@__PURE__*/getDefaultExportFromCjs(optionsFromStrings_1);
-
 var defaults_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -3057,10 +2408,7 @@ var defaults = {
 exports.default = defaults;
 });
 
-const defaults = /*@__PURE__*/getDefaultExportFromCjs(defaults_1);
-
 var getOptionsFromElement_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -3103,10 +2451,7 @@ function getOptionsFromElement(element) {
 exports.default = getOptionsFromElement;
 });
 
-const getOptionsFromElement = /*@__PURE__*/getDefaultExportFromCjs(getOptionsFromElement_1);
-
 var shared = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -3209,10 +2554,7 @@ exports.calculateEncodingAttributes = calculateEncodingAttributes;
 exports.getTotalWidthOfEncodings = getTotalWidthOfEncodings;
 });
 
-const shared$1 = /*@__PURE__*/getDefaultExportFromCjs(shared);
-
 var canvas = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -3372,10 +2714,7 @@ var CanvasRenderer = function () {
 exports.default = CanvasRenderer;
 });
 
-const canvas$1 = /*@__PURE__*/getDefaultExportFromCjs(canvas);
-
 var svg = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -3566,10 +2905,7 @@ var SVGRenderer = function () {
 exports.default = SVGRenderer;
 });
 
-const svg$1 = /*@__PURE__*/getDefaultExportFromCjs(svg);
-
 var object = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -3601,10 +2937,7 @@ var ObjectRenderer = function () {
 exports.default = ObjectRenderer;
 });
 
-const object$1 = /*@__PURE__*/getDefaultExportFromCjs(object);
-
 var renderers = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
   value: true
@@ -3627,10 +2960,7 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 exports.default = { CanvasRenderer: _canvas2.default, SVGRenderer: _svg2.default, ObjectRenderer: _object2.default };
 });
 
-const index = /*@__PURE__*/getDefaultExportFromCjs(renderers);
-
 var exceptions = createCommonjsModule(function (module, exports) {
-'use strict';
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -3699,10 +3029,7 @@ exports.InvalidElementException = InvalidElementException;
 exports.NoElementException = NoElementException;
 });
 
-const exceptions$1 = /*@__PURE__*/getDefaultExportFromCjs(exceptions);
-
 var getRenderProperties_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -3812,10 +3139,7 @@ function newCanvasRenderProperties(imgElement) {
 exports.default = getRenderProperties;
 });
 
-const getRenderProperties = /*@__PURE__*/getDefaultExportFromCjs(getRenderProperties_1);
-
 var ErrorHandler_1 = createCommonjsModule(function (module, exports) {
-"use strict";
 
 Object.defineProperty(exports, "__esModule", {
 	value: true
@@ -3871,10 +3195,7 @@ var ErrorHandler = function () {
 exports.default = ErrorHandler;
 });
 
-const ErrorHandler = /*@__PURE__*/getDefaultExportFromCjs(ErrorHandler_1);
-
 var JsBarcode_1 = createCommonjsModule(function (module) {
-'use strict';
 
 
 
@@ -4132,9 +3453,11 @@ const JsBarcode = /*@__PURE__*/getDefaultExportFromCjs(JsBarcode_1);
 
 const indexCss = ".bar-code{display:flex;justify-content:center}";
 
-const BarCode = class {
-  constructor(hostRef) {
-    registerInstance(this, hostRef);
+const BarCode$1 = /*@__PURE__*/ proxyCustomElement(class extends HTMLElement {
+  constructor() {
+    super();
+    this.__registerHost();
+    this.__attachShadow();
     this.barcodeId = `uuid-${v4()}`;
   }
   componentDidLoad() {
@@ -4149,7 +3472,23 @@ const BarCode = class {
   render() {
     return (h(Host, { id: this.barcodeId }, h("div", { class: "bar-code" }, h("svg", null))));
   }
-};
-BarCode.style = indexCss;
+  static get style() { return indexCss; }
+}, [1, "bar-code"]);
+function defineCustomElement$1() {
+  if (typeof customElements === "undefined") {
+    return;
+  }
+  const components = ["bar-code"];
+  components.forEach(tagName => { switch (tagName) {
+    case "bar-code":
+      if (!customElements.get(tagName)) {
+        customElements.define(tagName, BarCode$1);
+      }
+      break;
+  } });
+}
 
-export { BarCode as bar_code };
+const BarCode = BarCode$1;
+const defineCustomElement = defineCustomElement$1;
+
+export { BarCode, defineCustomElement };
