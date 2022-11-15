@@ -1,5 +1,5 @@
 {
-  "name": "evo-wc",
+  "name": "@nhutngo/evo-wc",
   "version": "0.0.1",
   "description": "Stencil Component Starter",
   "main": "dist/index.cjs.js",
@@ -12,7 +12,7 @@
   "unpkg": "dist/evo-wc/evo-wc.esm.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ionic-team/stencil-component-starter.git"
+    "url": "git+https://github.com/minhnhut16/evo-wc-stencil.git"
   },
   "files": [
     "dist/",
@@ -46,5 +46,10 @@
     "rollup-plugin-node-polyfills": "^0.2.1",
     "typescript": "^4.8.4"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/minhnhut16/evo-wc-stencil/issues"
+  },
+  "homepage": "https://github.com/minhnhut16/evo-wc-stencil",
+  "author": "minhnhut16"
 }
