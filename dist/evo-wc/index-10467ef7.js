@@ -1,4 +1,4 @@
-import { getRenderingRef, forceUpdate } from '@stencil/core/internal/client';
+import { g as getRenderingRef, f as forceUpdate } from './index-b99e61ae.js';
 
 const appendToMap = (map, propName, value) => {
     const items = map.get(propName);

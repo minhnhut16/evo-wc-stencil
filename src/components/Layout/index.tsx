@@ -18,10 +18,7 @@ export class Layout {
     return (
       <section class="layout-app-wrapper">
         <div class="inner">
-          {state.loading
-            ? <img class="loading" src={getAssetPath('./assets/loading.svg')} />
-            : <slot />
-          }
+          <slot />
         </div>
       </section>
     );
